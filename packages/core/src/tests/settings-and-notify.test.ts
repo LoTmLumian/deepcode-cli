@@ -346,13 +346,30 @@ test("resolveSettings reads TEMPERATURE, THINKING_ENABLED, REASONING_EFFORT, and
   assert.equal(resolved.baseURL, "https://default.example.com");
 });
 
-test("resolveSettings defaults telemetryEnabled to true", () => {
+test("resolveSettings defaults telemetryEnabled and allowThirdParty to false", () => {
   const resolved = resolveSettings(
     {},
     { model: "default-model", baseURL: "https://default.example.com" },
     TEST_PROCESS_ENV
   );
-  assert.equal(resolved.telemetryEnabled, true);
+  assert.equal(resolved.telemetryEnabled, false);
+  assert.equal(resolved.allowThirdParty, false);
+});
+
+test("resolveSettings reads allowThirdParty from settings and env", () => {
+  const fromSettings = resolveSettings(
+    { allowThirdParty: true },
+    { model: "default-model", baseURL: "https://default.example.com" },
+    TEST_PROCESS_ENV
+  );
+  assert.equal(fromSettings.allowThirdParty, true);
+
+  const fromEnv = resolveSettings(
+    { env: { ALLOW_THIRD_PARTY: "true" } },
+    { model: "default-model", baseURL: "https://default.example.com" },
+    TEST_PROCESS_ENV
+  );
+  assert.equal(fromEnv.allowThirdParty, true);
 });
 
 test("resolveSettings reads TELEMETRY_ENABLED from env", () => {

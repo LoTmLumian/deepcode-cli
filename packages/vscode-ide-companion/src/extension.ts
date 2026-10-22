@@ -400,6 +400,8 @@ export class DeepCodeViewProvider implements vscode.WebviewViewProvider {
     thinkingEnabled: boolean;
     reasoningEffort: ReasoningEffort;
     debugLogEnabled: boolean;
+    telemetryEnabled?: boolean;
+    allowThirdParty?: boolean;
     notify?: string;
     webSearchTool?: string;
     env?: Record<string, string>;
@@ -424,6 +426,8 @@ export class DeepCodeViewProvider implements vscode.WebviewViewProvider {
         thinkingEnabled,
         reasoningEffort,
         debugLogEnabled,
+        telemetryEnabled: settings.telemetryEnabled,
+        allowThirdParty: settings.allowThirdParty,
         notify,
         webSearchTool,
         env,
@@ -447,6 +451,8 @@ export class DeepCodeViewProvider implements vscode.WebviewViewProvider {
       thinkingEnabled,
       reasoningEffort,
       debugLogEnabled,
+      telemetryEnabled: settings.telemetryEnabled,
+      allowThirdParty: settings.allowThirdParty,
       notify,
       webSearchTool,
       env,

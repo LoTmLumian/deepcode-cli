@@ -30,7 +30,7 @@ for (const [key, host, llmHost] of routes) {
         assert.equal(resolvePlusHost(input), host);
         assert.equal(resolvePlusLlmHost(input), llmHost);
         assert.equal(
-          resolveOpenAIConnection({ baseURL: "https://regular.test" }, input, "on").baseURL,
+          resolveOpenAIConnection({ baseURL: "https://regular.test" }, input, "on", "unknown", true).baseURL,
           `${llmHost}/plugin/openai`
         );
         assert.equal(

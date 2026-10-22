@@ -238,21 +238,13 @@ function runNpmViewLatestVersion(
 }
 
 function spawnNpm(args: string[], options: SpawnOptions): ChildProcess {
-  if (process.platform === "win32") {
-    return spawn(["npm", ...args.map(quoteCmdArg)].join(" "), [], {
-      ...options,
-      shell: true,
-    });
-  }
-
+  // Pass arguments as an array without a shell on every platform. This avoids
+  // shell metacharacter injection through externally sourced arguments (e.g. a
+  // registry-provided version string) on Windows.
   return spawn("npm", args, {
     ...options,
     shell: false,
   });
-}
-
-function quoteCmdArg(arg: string): string {
-  return `"${String(arg).replace(/"/g, '\\"')}"`;
 }
 
 export function parseNpmViewVersion(output: string): string | null {

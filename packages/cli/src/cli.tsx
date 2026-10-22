@@ -10,6 +10,7 @@ import { writeStderrLine, writeStdoutLine } from "./utils/stdio-helpers";
 import { getPackageJson } from "./utils/package";
 import { CLI_VERSION } from "./generated/git-commit";
 import { runExecMode } from "./exec-runner";
+import { runConfigCommand } from "./config-command";
 
 void main();
 
@@ -21,6 +22,12 @@ async function main(): Promise<void> {
   // but with .exitProcess(false) we need to exit manually.
   if (parsed.version || parsed.help) {
     process.exit(0);
+  }
+
+  // Handle `deepcode config ...` subcommand (no TTY required).
+  if (parsed.config) {
+    process.exitCode = await runConfigCommand(parsed.configAction, parsed.configValue);
+    return;
   }
 
   // Configure Windows shell AFTER --version/--help handling.

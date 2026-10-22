@@ -17,6 +17,7 @@ export type OpenAIClientResult = {
   reasoningEffort?: ReasoningEffort;
   debugLogEnabled?: boolean;
   telemetryEnabled?: boolean;
+  allowThirdParty?: boolean;
   notify?: string;
   webSearchTool?: string;
   env?: Record<string, string>;

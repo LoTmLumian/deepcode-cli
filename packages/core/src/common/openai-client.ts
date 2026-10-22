@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { randomUUID } from "crypto";
 import OpenAI from "openai";
 import { Agent, fetch as undiciFetch } from "undici";
 import { readDeepcodePlusSettings, resolveCurrentSettings, type ReasoningEffort } from "../settings";
@@ -42,6 +43,7 @@ export function createOpenAIClient(
   reasoningEffort: ReasoningEffort;
   debugLogEnabled: boolean;
   telemetryEnabled: boolean;
+  allowThirdParty: boolean;
   notify?: string;
   webSearchTool?: string;
   env: Record<string, string>;
@@ -54,7 +56,8 @@ export function createOpenAIClient(
   const plusSettings = context ? undefined : readDeepcodePlusSettings();
   const plusApiKey = context ? context.plusApiKey : plusSettings?.apiKey;
   const connection =
-    context?.connection ?? resolveOpenAIConnection(settings, plusApiKey, plusSettings?.subscriptionPlan);
+    context?.connection ??
+    resolveOpenAIConnection(settings, plusApiKey, plusSettings?.subscriptionPlan, "unknown", settings.allowThirdParty);
   if (!connection.apiKey) {
     return {
       client: null,
@@ -66,6 +69,7 @@ export function createOpenAIClient(
       reasoningEffort: settings.reasoningEffort,
       debugLogEnabled: settings.debugLogEnabled,
       telemetryEnabled: settings.telemetryEnabled,
+      allowThirdParty: settings.allowThirdParty,
       notify: settings.notify,
       webSearchTool: settings.webSearchTool,
       env: settings.env,
@@ -88,6 +92,7 @@ export function createOpenAIClient(
       reasoningEffort: settings.reasoningEffort,
       debugLogEnabled: settings.debugLogEnabled,
       telemetryEnabled: settings.telemetryEnabled,
+      allowThirdParty: settings.allowThirdParty,
       notify: settings.notify,
       webSearchTool: settings.webSearchTool,
       env: settings.env,
@@ -129,6 +134,7 @@ export function createOpenAIClient(
     reasoningEffort: settings.reasoningEffort,
     debugLogEnabled: settings.debugLogEnabled,
     telemetryEnabled: settings.telemetryEnabled,
+    allowThirdParty: settings.allowThirdParty,
     notify: settings.notify,
     webSearchTool: settings.webSearchTool,
     env: settings.env,
@@ -148,7 +154,7 @@ function getMachineId(): string | undefined {
         return raw;
       }
     }
-    const generated = `${os.hostname()}-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+    const generated = randomUUID();
     fs.mkdirSync(path.dirname(idPath), { recursive: true });
     fs.writeFileSync(idPath, generated, "utf8");
     return generated;

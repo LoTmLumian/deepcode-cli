@@ -2167,7 +2167,7 @@ ${agentInstructions}
 
   private reportNewPrompt(): void {
     const { machineId, telemetryEnabled, plusApiKey } = this.createOpenAIClient();
-    reportNewPrompt({ enabled: telemetryEnabled ?? true, machineId, plusApiKey });
+    reportNewPrompt({ enabled: telemetryEnabled ?? false, machineId, plusApiKey });
   }
 
   interruptActiveSession(): void {
@@ -2619,7 +2619,7 @@ ${agentInstructions}
       })),
       originalPath: this.projectRoot,
     };
-    fs.writeFileSync(sessionsIndexPath, JSON.stringify(normalized, null, 2), "utf8");
+    fs.writeFileSync(sessionsIndexPath, JSON.stringify(normalized, null, 2), { encoding: "utf8", mode: 0o600 });
   }
 
   private getSessionMessagesPath(sessionId: string): string {
@@ -2683,14 +2683,14 @@ ${agentInstructions}
   private appendSessionMessage(sessionId: string, message: SessionMessage): void {
     this.ensureProjectDir();
     const messagePath = this.getSessionMessagesPath(sessionId);
-    fs.appendFileSync(messagePath, `${JSON.stringify(message)}\n`, "utf8");
+    fs.appendFileSync(messagePath, `${JSON.stringify(message)}\n`, { encoding: "utf8", mode: 0o600 });
   }
 
   private saveSessionMessages(sessionId: string, messages: SessionMessage[]): void {
     this.ensureProjectDir();
     const messagePath = this.getSessionMessagesPath(sessionId);
     const payload = messages.map((message) => JSON.stringify(message)).join("\n");
-    fs.writeFileSync(messagePath, payload ? `${payload}\n` : "", "utf8");
+    fs.writeFileSync(messagePath, payload ? `${payload}\n` : "", { encoding: "utf8", mode: 0o600 });
   }
 
   private updateSessionEntry(sessionId: string, updater: (entry: SessionEntry) => SessionEntry): SessionEntry | null {

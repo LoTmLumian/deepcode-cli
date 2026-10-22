@@ -124,6 +124,7 @@ for (const baseURL of ["https://example.com/v1", "https://api.deepseek.com"]) {
           client: fakeClient,
           machineId: "machine-id-123",
           plusApiKey: key,
+          allowThirdParty: true,
           onProcessStart: (id, command) => starts.push({ id, command }),
           onProcessExit: (id) => exits.push(id),
         })
@@ -178,6 +179,7 @@ test("WebSearch reports and records a default API rate limit error", async () =>
       baseURL: "https://example.com/v1",
       client: fakeClient,
       machineId: "machine-id-123",
+      allowThirdParty: true,
       onPluginRateLimitExceeded: (tool) => rateLimitedTools.push(tool),
     })
   );
@@ -218,6 +220,7 @@ test("WebSearch matches rate limit errors case-sensitively", async () => {
       baseURL: "https://example.com/v1",
       client: fakeClient,
       machineId: "machine-id-123",
+      allowThirdParty: true,
       onPluginRateLimitExceeded: (tool) => rateLimitedTools.push(tool),
     })
   );
@@ -271,6 +274,7 @@ test("WebSearch translates the query before using the default API with the DeepS
       model: "configured-model",
       machineId: "machine-id-123",
       baseURL: "https://api.deepseek.com",
+      allowThirdParty: true,
       onProcessStart: (id, command) => starts.push({ id, command }),
       onProcessExit: (id) => exits.push(id),
     })
@@ -289,13 +293,47 @@ test("WebSearch translates the query before using the default API with the DeepS
 
 test("WebSearch returns a configuration error when neither a script nor an LLM client is available", async () => {
   const workspace = createTempWorkspace();
-  const result = await handleWebSearchTool({ query: "latest node release" }, createContext(workspace));
+  const result = await handleWebSearchTool(
+    { query: "latest node release" },
+    createContext(workspace, { allowThirdParty: true })
+  );
 
   assert.equal(result.ok, false);
   assert.equal(
     result.error,
     "WebSearch default mode requires a valid LLM configuration in ~/.deepcode/settings.json or ./.deepcode/settings.json."
   );
+});
+
+test("WebSearch default mode is disabled by default without allowThirdParty", async () => {
+  const workspace = createTempWorkspace();
+  const fetchCalls: Array<{ input: string | URL; init?: RequestInit }> = [];
+  globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+    fetchCalls.push({ input, init });
+    return new Response(JSON.stringify({ success: true, result: "should not be reached" }));
+  }) as typeof fetch;
+  const fakeClient = {
+    chat: {
+      completions: {
+        create: async () => ({
+          choices: [{ message: { content: '{"dominant_language":"en","reason":"English."}' } }],
+        }),
+      },
+    },
+  } as unknown as OpenAI;
+
+  const result = await handleWebSearchTool(
+    { query: "latest node release" },
+    createContext(workspace, {
+      client: fakeClient,
+      machineId: "machine-id-123",
+      baseURL: "https://api.deepseek.com",
+    })
+  );
+
+  assert.equal(result.ok, false);
+  assert.match(result.error ?? "", /disabled by default/);
+  assert.equal(fetchCalls.length, 0);
 });
 
 function createContext(
@@ -308,6 +346,7 @@ function createContext(
     env?: Record<string, string>;
     machineId?: string;
     plusApiKey?: string;
+    allowThirdParty?: boolean;
     onProcessStart?: (processId: string | number, command: string) => void;
     onProcessExit?: (processId: string | number) => void;
     onPluginRateLimitExceeded?: ToolExecutionContext["onPluginRateLimitExceeded"];
@@ -333,6 +372,7 @@ function createContext(
       env: options.env,
       machineId: options.machineId,
       plusApiKey: options.plusApiKey,
+      allowThirdParty: options.allowThirdParty,
     }),
     onProcessStart: options.onProcessStart,
     onProcessExit: options.onProcessExit,

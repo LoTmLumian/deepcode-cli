@@ -32,6 +32,7 @@ function createSettings(
     reasoningEffort: "high",
     debugLogEnabled: false,
     telemetryEnabled: false,
+    allowThirdParty: false,
     multimodal: "default",
     filesApiEnabled: false,
     filesApiTimeoutMs: 60_000,

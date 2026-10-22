@@ -319,11 +319,11 @@ export function evaluatePermissionScopes(
     allow: [],
     deny: [],
     ask: [],
-    defaultMode: "allowAll",
+    defaultMode: "askAll",
     addWorkingDirs: [],
   }
 ): PermissionDecision {
-  if (scopes.includes("unknown") && settings.defaultMode !== "allowAll") {
+  if (scopes.includes("unknown")) {
     return "ask";
   }
   if (scopes.length === 0) {
@@ -348,16 +348,14 @@ export function getPermissionScopesRequiringAsk(
     allow: [],
     deny: [],
     ask: [],
-    defaultMode: "allowAll",
+    defaultMode: "askAll",
     addWorkingDirs: [],
   }
 ): AskPermissionScope[] {
   const result: AskPermissionScope[] = [];
   for (const scope of scopes) {
     if (scope === "unknown") {
-      if (settings.defaultMode !== "allowAll") {
-        result.push(scope);
-      }
+      result.push(scope);
       continue;
     }
     if (settings.deny.includes(scope)) {

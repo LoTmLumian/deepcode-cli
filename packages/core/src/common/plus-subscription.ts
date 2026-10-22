@@ -79,11 +79,15 @@ export function resolveOpenAIConnection(
   settings: { apiKey?: string; baseURL: string },
   plusApiKey?: string,
   subscriptionPlan: DeepcodePlusSettings["subscriptionPlan"] = "default",
-  status: PlusSubscriptionStatus = "unknown"
+  status: PlusSubscriptionStatus = "unknown",
+  allowThirdParty: boolean = false
 ): OpenAIConnection {
   plusApiKey = normalizePlusApiKey(plusApiKey);
-  const baseURL = `${resolvePlusLlmHost(plusApiKey)}/plugin/openai`;
   const regular = { apiKey: settings.apiKey, baseURL: settings.baseURL, usingPlus: false };
+  // Third-party routing is opt-in only. Without explicit allowThirdParty, never
+  // send any request or credential to the third-party Plus servers.
+  if (!allowThirdParty) return regular;
+  const baseURL = `${resolvePlusLlmHost(plusApiKey)}/plugin/openai`;
   if (subscriptionPlan === "off") return regular;
   if (subscriptionPlan === "on" && !plusApiKey) {
     return {
@@ -149,7 +153,7 @@ export async function checkPlusSubscription(
 
 /** Keep the selected credentials stable for every LLM call within a turn. */
 export function withPlusSubscription(
-  getSettings: () => { apiKey?: string; baseURL: string },
+  getSettings: () => { apiKey?: string; baseURL: string; allowThirdParty?: boolean },
   buildClient: (context: OpenAIConnectionContext) => OpenAIClientResult,
   dependencies: {
     readSettings?: () => DeepcodePlusSettings;
@@ -159,15 +163,29 @@ export function withPlusSubscription(
   const readSettings = dependencies.readSettings ?? readDeepcodePlusSettings;
   const checkSubscription = dependencies.checkSubscription ?? checkPlusSubscription;
   let prepared: OpenAIConnectionContext | undefined;
-  const resolve = (plus: DeepcodePlusSettings, status: PlusSubscriptionStatus): OpenAIConnectionContext => ({
-    connection: resolveOpenAIConnection(getSettings(), plus.apiKey, plus.subscriptionPlan, status),
-    plusApiKey: plus.apiKey,
-  });
+  const resolve = (plus: DeepcodePlusSettings, status: PlusSubscriptionStatus): OpenAIConnectionContext => {
+    const settings = getSettings();
+    return {
+      connection: resolveOpenAIConnection(
+        settings,
+        plus.apiKey,
+        plus.subscriptionPlan,
+        status,
+        settings.allowThirdParty
+      ),
+      plusApiKey: plus.apiKey,
+    };
+  };
   return Object.assign(() => buildClient(prepared ?? resolve(readSettings(), "unknown")), {
     prepare: async (signal?: AbortSignal) => {
       signal?.throwIfAborted();
-      const settings = readSettings();
-      const plus = { ...settings, apiKey: normalizePlusApiKey(settings.apiKey) };
+      const settings = getSettings();
+      if (!settings.allowThirdParty) {
+        prepared = resolve(readSettings(), "unknown");
+        return;
+      }
+      const plusSettings = readSettings();
+      const plus = { ...plusSettings, apiKey: normalizePlusApiKey(plusSettings.apiKey) };
       const status =
         plus.subscriptionPlan === "default" && plus.apiKey ? await checkSubscription(plus.apiKey, signal) : "unknown";
       signal?.throwIfAborted();

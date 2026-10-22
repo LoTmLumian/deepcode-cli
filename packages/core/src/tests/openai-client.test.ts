@@ -9,7 +9,10 @@ import { createOpenAIClientFactory, DEEPCODE_PLUS_BASE_URL, resolveOpenAIConnect
 test("resolveOpenAIConnection falls back to DeepCode Plus credentials", () => {
   const resolved = resolveOpenAIConnection(
     { baseURL: "https://configured.example.com" },
-    "sk-aaaaaaaaaaaaaaaaaaaaaaaa"
+    "sk-aaaaaaaaaaaaaaaaaaaaaaaa",
+    "default",
+    "unknown",
+    true
   );
 
   assert.deepEqual(resolved, {
@@ -22,7 +25,10 @@ test("resolveOpenAIConnection falls back to DeepCode Plus credentials", () => {
 test("resolveOpenAIConnection prefers regular credentials", () => {
   const resolved = resolveOpenAIConnection(
     { apiKey: "sk-regular-test", baseURL: "https://configured.example.com" },
-    "sk-aaaaaaaaaaaaaaaaaaaaaaaa"
+    "sk-aaaaaaaaaaaaaaaaaaaaaaaa",
+    "default",
+    "unknown",
+    true
   );
 
   assert.deepEqual(resolved, {
@@ -33,7 +39,13 @@ test("resolveOpenAIConnection prefers regular credentials", () => {
 });
 
 test("resolveOpenAIConnection preserves the configured base URL without credentials", () => {
-  const resolved = resolveOpenAIConnection({ baseURL: "https://configured.example.com" });
+  const resolved = resolveOpenAIConnection(
+    { baseURL: "https://configured.example.com" },
+    undefined,
+    "default",
+    "unknown",
+    true
+  );
 
   assert.deepEqual(resolved, {
     apiKey: undefined,
@@ -55,6 +67,8 @@ test("on mode retains PLUS routing after the existing models warmup fails", asyn
       env: { PLUS_API_KEY: "sk-bbbbbbbbbbbbbbbbbbbbbbbbbb" },
     })
   );
+  fs.mkdirSync(path.join(home, ".deepcode"));
+  fs.writeFileSync(path.join(home, ".deepcode", "settings.json"), JSON.stringify({ allowThirdParty: true }));
   // Stub the SDK warmup, so no request can reach the real PLUS service.
   const warmup = t.mock.method(Models.prototype, "list", () => Promise.reject(new Error("HTTP 403")));
   try {

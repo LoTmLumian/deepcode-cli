@@ -33,6 +33,7 @@ type LLMClientContext = {
   env?: Record<string, string>;
   machineId?: string;
   plusApiKey?: string;
+  allowThirdParty?: boolean;
 };
 
 export async function handleWebSearchTool(
@@ -53,6 +54,16 @@ export async function handleWebSearchTool(
   const scriptPath = llmContext?.webSearchTool?.trim();
   if (scriptPath) {
     return executeConfiguredWebSearch(query, scriptPath, context, llmContext?.env ?? {});
+  }
+
+  if (llmContext?.allowThirdParty !== true) {
+    return {
+      ok: false,
+      name: "WebSearch",
+      error:
+        "WebSearch default mode sends your query to a third-party server and is disabled by default. " +
+        'Set "allowThirdParty": true in ~/.deepcode/settings.json, or configure webSearchTool to a local script.',
+    };
   }
 
   if (!hasUsableClient(llmContext)) {

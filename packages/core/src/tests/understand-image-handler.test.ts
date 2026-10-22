@@ -50,6 +50,7 @@ for (const [key, host] of [
           thinkingEnabled: false,
           machineId: "machine-id-123",
           plusApiKey: key,
+          allowThirdParty: true,
         }),
       }
     );
@@ -93,6 +94,7 @@ test("UnderstandImage reports an HTTP 200 business error", async () => {
     model: "deepseek-chat",
     thinkingEnabled: false,
     machineId: "machine-id-123",
+    allowThirdParty: true,
   });
   const result = await handleUnderstandImageTool({ prompt: "Describe it", image_path: imagePath }, context);
 
@@ -162,6 +164,38 @@ test("UnderstandImage validates absolute paths, formats, and size before fetchin
   assert.equal(fetchCount, 0);
 });
 
+test("UnderstandImage is disabled by default and does not upload without allowThirdParty", async () => {
+  const workspace = createTempDir("deepcode-understand-image-disabled-");
+  const imagePath = path.join(workspace, "pixel.png");
+  fs.writeFileSync(imagePath, Buffer.from([1, 2, 3]));
+  const starts: Array<{ id: string | number; command: string }> = [];
+  const exits: Array<string | number> = [];
+  let fetchCount = 0;
+  globalThis.fetch = (async () => {
+    fetchCount += 1;
+    return new Response();
+  }) as typeof fetch;
+
+  const context = createContext(workspace, {
+    onProcessStart: (id, command) => starts.push({ id, command }),
+    onProcessExit: (id) => exits.push(id),
+  });
+  context.createOpenAIClient = () => ({
+    client: null,
+    model: "deepseek-chat",
+    thinkingEnabled: false,
+    machineId: "machine-id-123",
+    plusApiKey: "sk-aaaaaaaaaaaaaaaaaaaaaaaa",
+  });
+  const result = await handleUnderstandImageTool({ prompt: "Describe it", image_path: imagePath }, context);
+
+  assert.equal(result.ok, false);
+  assert.match(result.error ?? "", /disabled by default/);
+  assert.equal(fetchCount, 0);
+  assert.deepEqual(starts, []);
+  assert.deepEqual(exits, []);
+});
+
 function createContext(
   projectRoot: string,
   hooks: Pick<ToolExecutionContext, "onProcessStart" | "onProcessExit" | "onPluginRateLimitExceeded"> = {}
@@ -180,6 +214,7 @@ function createContext(
       thinkingEnabled: false,
       machineId: "machine-id-123",
       plusApiKey: "sk-aaaaaaaaaaaaaaaaaaaaaaaa",
+      allowThirdParty: true,
     }),
     ...hooks,
   };

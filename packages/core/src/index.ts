@@ -164,3 +164,6 @@ export type { FileReadMetadata } from "./common/file-utils";
 
 export { checkPlusSubscription, withPlusSubscription } from "./common/plus-subscription";
 export type { PlusSubscriptionStatus, OpenAIConnection, OpenAIConnectionContext } from "./common/plus-subscription";
+
+// Secret encryption
+export { encryptSecret, decryptSecret, getSecretKeyPath } from "./common/key-cipher";

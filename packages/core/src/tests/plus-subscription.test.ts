@@ -9,7 +9,7 @@ import {
 } from "../common/plus-subscription";
 import type { DeepcodePlusSettings } from "../settings";
 
-test("connection selection covers all plans, subscription states and missing credentials", () => {
+test("connection selection covers all plans, subscription states and missing credentials when allowThirdParty", () => {
   for (const subscriptionPlan of ["default", "on", "off"] as const) {
     for (const status of ["api only", "full ability", "unknown"] as const) {
       for (const apiKey of [undefined, "regular"]) {
@@ -18,7 +18,8 @@ test("connection selection covers all plans, subscription states and missing cre
             { apiKey, baseURL: "https://regular.test" },
             plusKey,
             subscriptionPlan,
-            status
+            status,
+            true
           );
           const label = JSON.stringify({ subscriptionPlan, status, apiKey, plusKey });
           if (subscriptionPlan === "on" && !plusKey) {
@@ -37,6 +38,20 @@ test("connection selection covers all plans, subscription states and missing cre
         }
       }
     }
+  }
+});
+
+test("connection never routes to third-party without allowThirdParty", () => {
+  for (const plusKey of [undefined, "sk-aaaaaaaaaaaaaaaaaaaaaaaa"] as const) {
+    const connection = resolveOpenAIConnection(
+      { apiKey: "regular", baseURL: "https://regular.test" },
+      plusKey,
+      "on",
+      "full ability"
+    );
+    assert.equal(connection.usingPlus, false);
+    assert.equal(connection.apiKey, "regular");
+    assert.equal(connection.baseURL, "https://regular.test");
   }
 });
 
@@ -109,7 +124,7 @@ test("user cancellation propagates instead of selecting a fallback", async () =>
 
 test("factory prepares once per turn, holds credentials stable, and isolates instances", async () => {
   let plus: DeepcodePlusSettings = { apiKey: "sk-aaaaaaaaaaaaaaaaaaaaaaaa", subscriptionPlan: "default" };
-  let regular = { apiKey: "regular", baseURL: "https://regular.test" };
+  let regular = { apiKey: "regular", baseURL: "https://regular.test", allowThirdParty: true };
   let status: PlusSubscriptionStatus = "full ability";
   let checks = 0;
   const makeFactory = () =>
@@ -135,7 +150,7 @@ test("factory prepares once per turn, holds credentials stable, and isolates ins
   const otherFactory = makeFactory();
   await factory.prepare!();
   plus = { apiKey: "sk-bbbbbbbbbbbbbbbbbbbbbbbbbb", subscriptionPlan: "default" };
-  regular = { apiKey: "changed-regular", baseURL: "https://changed.test" };
+  regular = { apiKey: "changed-regular", baseURL: "https://changed.test", allowThirdParty: true };
   status = "api only";
   for (let i = 0; i < 3; i++) {
     assert.equal(factory().apiKey, "sk-aaaaaaaaaaaaaaaaaaaaaaaa");
@@ -156,7 +171,7 @@ test("on, off and absent PLUS key skip subscription checks", async () => {
     for (const key of [undefined, "sk-aaaaaaaaaaaaaaaaaaaaaaaa"]) {
       if (plan === "default" && key) continue;
       const factory = withPlusSubscription(
-        () => ({ apiKey: "regular", baseURL: "https://regular.test" }),
+        () => ({ apiKey: "regular", baseURL: "https://regular.test", allowThirdParty: true }),
         ({ connection }) => ({ ...connection, client: null, model: "test", thinkingEnabled: false }),
         {
           readSettings: () => ({ subscriptionPlan: plan, apiKey: key }),
@@ -169,4 +184,20 @@ test("on, off and absent PLUS key skip subscription checks", async () => {
       assert.equal(factory().apiKey, plan === "on" ? key : "regular");
     }
   }
+});
+
+test("factory skips subscription check without allowThirdParty", async () => {
+  const factory = withPlusSubscription(
+    () => ({ apiKey: "regular", baseURL: "https://regular.test" }),
+    ({ connection }) => ({ ...connection, client: null, model: "test", thinkingEnabled: false }),
+    {
+      readSettings: () => ({ subscriptionPlan: "default", apiKey: "sk-aaaaaaaaaaaaaaaaaaaaaaaa" }),
+      checkSubscription: async () => {
+        assert.fail("must not check subscription without allowThirdParty");
+      },
+    }
+  );
+  await factory.prepare!();
+  assert.equal(factory().usingPlus, false);
+  assert.equal(factory().apiKey, "regular");
 });

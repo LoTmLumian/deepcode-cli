@@ -58,6 +58,7 @@ for (const stage of ["diagnosis", "escape", "language", "translation", "search",
       model: "test",
       machineId: "test-machine",
       thinkingEnabled: false,
+      allowThirdParty: true,
       baseURL: stage === "search-deepseek" ? "https://api.deepseek.com" : "https://example.com",
     });
     const originalFetch = globalThis.fetch;

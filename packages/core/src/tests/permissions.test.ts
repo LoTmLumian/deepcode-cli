@@ -53,7 +53,7 @@ test("evaluatePermissionScopes applies deny, ask, allow, and default mode preced
   assert.equal(evaluatePermissionScopes(["unknown"], settings), "ask");
 });
 
-test("evaluatePermissionScopes allows unknown when defaultMode is allowAll", () => {
+test("evaluatePermissionScopes always asks for unknown regardless of defaultMode", () => {
   const allowAllSettings: Required<PermissionSettings> = {
     allow: [] as PermissionScope[],
     deny: [] as PermissionScope[],
@@ -61,7 +61,7 @@ test("evaluatePermissionScopes allows unknown when defaultMode is allowAll", () 
     defaultMode: "allowAll",
     addWorkingDirs: [],
   };
-  assert.equal(evaluatePermissionScopes(["unknown"], allowAllSettings), "allow");
+  assert.equal(evaluatePermissionScopes(["unknown"], allowAllSettings), "ask");
 
   // unknown + other scopes that would otherwise trigger ask should still ask for those scopes
   const askNetworkSettings: Required<PermissionSettings> = {
@@ -75,7 +75,16 @@ test("evaluatePermissionScopes allows unknown when defaultMode is allowAll", () 
 });
 
 test("evaluatePermissionScopes applies configured policies to temporary directory scopes", () => {
-  assert.equal(evaluatePermissionScopes(["read-in-tmp"]), "allow");
+  assert.equal(
+    evaluatePermissionScopes(["read-in-tmp"], {
+      allow: ["read-in-tmp"],
+      deny: [],
+      ask: [],
+      defaultMode: "askAll",
+      addWorkingDirs: [],
+    }),
+    "allow"
+  );
   assert.equal(
     evaluatePermissionScopes(["write-in-tmp"], {
       allow: [],
@@ -98,7 +107,7 @@ test("evaluatePermissionScopes applies configured policies to temporary director
   );
 });
 
-test("getPermissionScopesRequiringAsk excludes unknown when defaultMode is allowAll", () => {
+test("getPermissionScopesRequiringAsk always includes unknown regardless of defaultMode", () => {
   const allowAllSettings: Required<PermissionSettings> = {
     allow: [] as PermissionScope[],
     deny: [] as PermissionScope[],
@@ -107,7 +116,7 @@ test("getPermissionScopesRequiringAsk excludes unknown when defaultMode is allow
     addWorkingDirs: [],
   };
   const result = getPermissionScopesRequiringAsk(["unknown", "network"], allowAllSettings);
-  assert.deepEqual(result, ["network"]);
+  assert.deepEqual(result, ["unknown", "network"]);
 });
 
 test("getPermissionScopesRequiringAsk includes unknown when defaultMode is askAll", () => {

@@ -376,3 +376,35 @@ test("parseArguments exits when --last is combined with bare --resume", async ()
     assert.ok(exitSpy.calls.length >= 1);
   });
 });
+
+// ── parseArguments: config subcommand ──────────────────────────────────────────
+
+test("parseArguments detects `config encrypt`", async () => {
+  const r = await parseArguments(["config", "encrypt"]);
+  assert.equal(r.config, true);
+  assert.equal(r.configAction, "encrypt");
+});
+
+test("parseArguments passes --value through for config encrypt", async () => {
+  const r = await parseArguments(["config", "encrypt", "--value", "sk-abc"]);
+  assert.equal(r.config, true);
+  assert.equal(r.configAction, "encrypt");
+  assert.equal(r.configValue, "sk-abc");
+});
+
+test("parseArguments does not mark config when absent", async () => {
+  const r = await parseArguments(["-p", "hello"]);
+  assert.equal(r.config, false);
+  assert.equal(r.configAction, undefined);
+});
+
+test("parseArguments exits on an unknown config action", async () => {
+  await withMockedExit(async (exitSpy) => {
+    try {
+      await parseArguments(["config", "bogus"]);
+    } catch {
+      /* expected */
+    }
+    assert.ok(exitSpy.calls.length >= 1);
+  });
+});

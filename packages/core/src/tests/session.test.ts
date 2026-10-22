@@ -12,6 +12,7 @@ import { getSystemPrompt } from "../prompt";
 import { getProjectCode, SessionManager, type SessionMessage } from "../session";
 import { withPlusSubscription, type PlusSubscriptionStatus } from "../common/plus-subscription";
 import type { MultimodalMode } from "../common/model-capabilities";
+import type { PermissionSettings } from "../settings";
 
 const originalFetch = globalThis.fetch;
 const originalConsoleWarn = console.warn;
@@ -1611,7 +1612,7 @@ test("createSession routes telemetry using the PLUS key and keeps the machineId 
     } as Response;
   }) as typeof fetch;
 
-  const manager = createSessionManager(workspace, "machine-id-123", "sk-" + "b".repeat(26));
+  const manager = createSessionManager(workspace, "machine-id-123", "sk-" + "b".repeat(26), true);
   const activatedSessionIds: string[] = [];
   (manager as any).activateSession = async (sessionId: string) => {
     activatedSessionIds.push(sessionId);
@@ -1644,7 +1645,7 @@ test("replySession reports a new prompt with the machineId token", async () => {
     } as Response;
   }) as typeof fetch;
 
-  const manager = createSessionManager(workspace, "machine-id-456");
+  const manager = createSessionManager(workspace, "machine-id-456", undefined, true);
   (manager as any).activateSession = async () => {};
 
   const sessionId = await manager.createSession({ text: "first prompt" });
@@ -1675,7 +1676,7 @@ test("reporting a new prompt does not warn when the background request fails", a
     throw new Error("fetch failed");
   }) as typeof fetch;
 
-  const manager = createSessionManager(workspace, "machine-id-failure");
+  const manager = createSessionManager(workspace, "machine-id-failure", undefined, true);
   (manager as any).activateSession = async () => {};
 
   await manager.createSession({ text: "hello world" });
@@ -4780,7 +4781,12 @@ function runFileHistoryGit(
   );
 }
 
-function createSessionManager(projectRoot: string, machineId: string, plusApiKey?: string): SessionManager {
+function createSessionManager(
+  projectRoot: string,
+  machineId: string,
+  plusApiKey?: string,
+  telemetryEnabled = false
+): SessionManager {
   return new SessionManager({
     projectRoot,
     createOpenAIClient: () => ({
@@ -4790,8 +4796,9 @@ function createSessionManager(projectRoot: string, machineId: string, plusApiKey
       thinkingEnabled: false,
       machineId,
       plusApiKey,
+      telemetryEnabled,
     }),
-    getResolvedSettings: () => ({ model: "test-model" }),
+    getResolvedSettings: () => ({ model: "test-model", permissions: PERMISSIVE_PERMISSIONS }),
     renderMarkdown: (text) => text,
     onAssistantMessage: () => {},
   });
@@ -4810,7 +4817,7 @@ function createSessionManagerForModel(
       thinkingEnabled: false,
       machineId: "machine-id-image-test",
     }),
-    getResolvedSettings: () => ({ model, multimodal }),
+    getResolvedSettings: () => ({ model, multimodal, permissions: PERMISSIVE_PERMISSIONS }),
     renderMarkdown: (text) => text,
     onAssistantMessage: () => {},
   });
@@ -4862,7 +4869,7 @@ function createNotifyingSessionManager(
         TITLE: "stale-title",
       },
     }),
-    getResolvedSettings: () => ({ model: "test-model" }),
+    getResolvedSettings: () => ({ model: "test-model", permissions: PERMISSIVE_PERMISSIONS }),
     renderMarkdown: (text) => text,
     onAssistantMessage: () => {},
   });
@@ -4896,7 +4903,7 @@ function createMockedClientSessionManager(
       baseURL: "https://api.deepseek.com",
       thinkingEnabled: false,
     }),
-    getResolvedSettings: () => ({ model: "test-model", autoCompactWindow }),
+    getResolvedSettings: () => ({ model: "test-model", autoCompactWindow, permissions: PERMISSIVE_PERMISSIONS }),
     renderMarkdown: (text) => text,
     onAssistantMessage: () => {},
   });
@@ -4954,11 +4961,32 @@ function createMockedClientSessionManagerWithClient(projectRoot: string, client:
       baseURL: "https://api.deepseek.com",
       thinkingEnabled: false,
     }),
-    getResolvedSettings: () => ({ model: "test-model" }),
+    getResolvedSettings: () => ({ model: "test-model", permissions: PERMISSIVE_PERMISSIONS }),
     renderMarkdown: (text) => text,
     onAssistantMessage: () => {},
   });
 }
+
+const PERMISSIVE_PERMISSIONS: Required<PermissionSettings> = {
+  allow: [
+    "read-in-cwd",
+    "read-in-tmp",
+    "read-out-cwd",
+    "write-in-cwd",
+    "write-in-tmp",
+    "write-out-cwd",
+    "delete-in-cwd",
+    "delete-out-cwd",
+    "query-git-log",
+    "mutate-git-log",
+    "network",
+    "mcp",
+  ],
+  deny: [],
+  ask: [],
+  defaultMode: "allowAll",
+  addWorkingDirs: [],
+};
 
 class APIUserAbortError extends Error {}
 
@@ -5163,6 +5191,9 @@ test("interrupt settles an active prompt waiting for an internal tool request", 
       model: "test",
       thinkingEnabled: false,
       telemetryEnabled: false,
+      allowThirdParty: true,
+      machineId: "machine-id-interrupt",
+      plusApiKey: "sk-aaaaaaaaaaaaaaaaaaaaaaaa",
     }),
     getResolvedSettings: () => ({ model: "test" }),
     renderMarkdown: (text) => text,
@@ -5208,7 +5239,7 @@ test("sessions prepare subscription before skill matching and preserve the actua
   let status: PlusSubscriptionStatus = "full ability";
   const calls: Array<{ key?: string; skill: boolean }> = [];
   const factory = withPlusSubscription(
-    () => ({ apiKey: "regular", baseURL: "https://regular.test" }),
+    () => ({ apiKey: "regular", baseURL: "https://regular.test", allowThirdParty: true }),
     ({ connection }) => ({
       ...connection,
       model: "test-model",
@@ -5275,7 +5306,7 @@ test("on without PLUS key fails clearly without falling back to a regular key", 
   const workspace = createTempDir("deepcode-missing-plus-workspace-");
   setHomeDir(createTempDir("deepcode-missing-plus-home-"));
   const factory = withPlusSubscription(
-    () => ({ apiKey: "regular", baseURL: "https://regular.test" }),
+    () => ({ apiKey: "regular", baseURL: "https://regular.test", allowThirdParty: true }),
     ({ connection }) => {
       assert.equal(connection.apiKey, undefined);
       return { ...connection, client: null, model: "test", thinkingEnabled: false, telemetryEnabled: false };
@@ -5303,7 +5334,7 @@ test("cancelling subscription preparation starts no LLM calls or new session", a
   setHomeDir(createTempDir("deepcode-cancel-subscription-home-"));
   const controller = new AbortController();
   const factory = withPlusSubscription(
-    () => ({ apiKey: "regular", baseURL: "https://regular.test" }),
+    () => ({ apiKey: "regular", baseURL: "https://regular.test", allowThirdParty: true }),
     () => {
       assert.fail("must not build a client after cancellation");
     },

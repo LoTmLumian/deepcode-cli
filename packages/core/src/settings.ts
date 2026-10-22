@@ -1,4 +1,5 @@
 import { DEEPSEEK_V4_MODELS, defaultsToThinkingMode, type MultimodalMode } from "./common/model-capabilities";
+import { isEncryptedValue, decryptSecret, getSecretKeyPath } from "./common/key-cipher";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -12,6 +13,7 @@ export type DeepcodingEnv = Record<string, string | undefined> & {
   REASONING_EFFORT?: string;
   DEBUG_LOG_ENABLED?: string;
   TELEMETRY_ENABLED?: string;
+  ALLOW_THIRD_PARTY?: string;
   MULTIMODAL?: string;
 };
 
@@ -94,6 +96,7 @@ export type DeepcodingSettings = {
   reasoningEffort?: ReasoningEffort;
   debugLogEnabled?: boolean;
   telemetryEnabled?: boolean;
+  allowThirdParty?: boolean;
   notify?: string;
   webSearchTool?: string;
   multimodal?: MultimodalMode;
@@ -121,6 +124,7 @@ export type ResolvedDeepcodingSettings = {
   reasoningEffort: ReasoningEffort;
   debugLogEnabled: boolean;
   telemetryEnabled: boolean;
+  allowThirdParty: boolean;
   notify?: string;
   webSearchTool?: string;
   multimodal: MultimodalMode;
@@ -317,7 +321,7 @@ function normalizePermissions(settings: PermissionSettings | null | undefined): 
     allow: normalizePermissionList(settings?.allow),
     deny: normalizePermissionList(settings?.deny),
     ask: normalizePermissionList(settings?.ask),
-    defaultMode: normalizePermissionDefaultMode(settings?.defaultMode) ?? "allowAll",
+    defaultMode: normalizePermissionDefaultMode(settings?.defaultMode) ?? "askAll",
     addWorkingDirs: normalizeWorkingDirectories(settings?.addWorkingDirs),
   };
 }
@@ -337,7 +341,7 @@ function mergePermissions(
       ? projectPermissions.defaultMode
       : userSettings?.permissions
         ? userPermissions.defaultMode
-        : "allowAll",
+        : "askAll",
   };
 }
 
@@ -577,7 +581,9 @@ export function resolveSettingsSources(
   userSettings: DeepcodingSettings | null | undefined,
   projectSettings: DeepcodingSettings | null | undefined,
   defaults: { model: string; baseURL: string },
-  processEnv: SettingsProcessEnv = process.env
+  processEnv: SettingsProcessEnv = process.env,
+  /** Override the secret key file location (used by tests). */
+  secretKeyPath?: string
 ): ResolvedDeepcodingSettings {
   const userEnv = normalizeEnv(userSettings?.env);
   const projectEnv = normalizeEnv(projectSettings?.env);
@@ -645,7 +651,15 @@ export function resolveSettingsSources(
     parseBoolean(projectEnv.TELEMETRY_ENABLED) ??
     parseBoolean(userSettings?.telemetryEnabled) ??
     parseBoolean(userEnv.TELEMETRY_ENABLED) ??
-    true;
+    false;
+
+  const allowThirdParty =
+    parseBoolean(systemEnv.ALLOW_THIRD_PARTY) ??
+    parseBoolean(projectSettings?.allowThirdParty) ??
+    parseBoolean(projectEnv.ALLOW_THIRD_PARTY) ??
+    parseBoolean(userSettings?.allowThirdParty) ??
+    parseBoolean(userEnv.ALLOW_THIRD_PARTY) ??
+    false;
 
   const notify =
     trimString(systemEnv.NOTIFY) || trimString(projectSettings?.notify) || trimString(userSettings?.notify) || "";
@@ -698,9 +712,25 @@ export function resolveSettingsSources(
       userSettings?.maxRequestFilesBytes
     ) ?? DEFAULT_MAX_REQUEST_FILES_BYTES;
 
+  const rawApiKey = trimString(env.API_KEY);
+  let apiKey: string | undefined;
+  if (rawApiKey) {
+    if (isEncryptedValue(rawApiKey)) {
+      const decrypted = decryptSecret(rawApiKey, secretKeyPath);
+      if (decrypted === null) {
+        throw new Error(
+          `Failed to decrypt API_KEY. The secret file (${secretKeyPath ?? getSecretKeyPath()}) may be missing, corrupted, or the encrypted value was tampered with. Re-run 'deepcode config encrypt' to re-encrypt.`
+        );
+      }
+      apiKey = decrypted;
+    } else {
+      apiKey = rawApiKey;
+    }
+  }
+
   return {
     env,
-    apiKey: trimString(env.API_KEY) || undefined,
+    apiKey,
     baseURL,
     model,
     contextWindow,
@@ -710,6 +740,7 @@ export function resolveSettingsSources(
     reasoningEffort,
     debugLogEnabled,
     telemetryEnabled,
+    allowThirdParty,
     notify: notify || undefined,
     webSearchTool: webSearchTool || undefined,
     multimodal,

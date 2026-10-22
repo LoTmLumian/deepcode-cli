@@ -39,6 +39,16 @@ export interface ParsedCliArgs {
   help: boolean;
   /** True when --last / -l was passed (resume the most recent session for the current project) */
   last: boolean;
+  /**
+   * Config subcommand, e.g. `deepcode config encrypt`.
+   * `config` is a string when the config subcommand was requested;
+   * the action name (e.g. "encrypt") is stored in `configAction`.
+   */
+  config: boolean;
+  /** Sub-action under `config`, e.g. "encrypt". */
+  configAction: string | undefined;
+  /** Optional plaintext value passed to `config encrypt` (prefer reading from stdin). */
+  configValue: string | undefined;
 }
 
 const EPILOG = [
@@ -160,6 +170,27 @@ async function configureYargs(argv?: string[]) {
     .example("deepcode -r, --resume [sessionId]", "Resume a session or show session picker")
     .example("deepcode -f, --fork [sessionId]", "Fork a session or the most recent session")
     .example('cat error.log | deepcode -x -p "Explain this error"', "Use piped stdin as additional context")
+    .command(
+      "config <action>",
+      "Manage configuration secrets (e.g. encrypt API_KEY)",
+      (yargsInstance: Argv) =>
+        yargsInstance
+          .positional("action", {
+            type: "string",
+            describe: "Sub-command: encrypt",
+            choices: ["encrypt"],
+          })
+          .option("value", {
+            type: "string",
+            describe: "Plaintext value to encrypt (reads from stdin if omitted)",
+          })
+          .example("deepcode config encrypt", "Encrypt API_KEY read from stdin (piped)")
+          .example(
+            'deepcode config encrypt --value "sk-..."',
+            "Encrypt API_KEY passed inline (visible in shell history)"
+          ),
+      () => {}
+    )
     .epilog(EPILOG)
     .strict()
     .demandCommand(0, 0)
@@ -189,6 +220,9 @@ export async function parseArguments(argv?: string[]): Promise<ParsedCliArgs> {
 
   const parsed = y.parseSync() as Record<string, unknown>;
 
+  const positionals = Array.isArray(parsed["_"]) ? (parsed["_"] as unknown[]) : [];
+  const positionalStrings = positionals.filter((x): x is string => typeof x === "string");
+
   const resumeRaw = parsed.resume as string | undefined;
   let resume: ParsedCliArgs["resume"];
   if (resumeRaw === undefined) {
@@ -217,5 +251,8 @@ export async function parseArguments(argv?: string[]): Promise<ParsedCliArgs> {
     version: parsed.version === true,
     help: parsed.help === true,
     last: parsed.last === true,
+    config: positionalStrings.includes("config"),
+    configAction: (parsed.action as string | undefined) ?? positionalStrings[1],
+    configValue: parsed.value as string | undefined,
   };
 }

@@ -30,6 +30,14 @@ export async function handleUnderstandImageTool(
     return toolError('"image_path" must be an absolute path.');
   }
 
+  const clientContext = context.createOpenAIClient?.();
+  if (clientContext?.allowThirdParty !== true) {
+    return toolError(
+      "UnderstandImage uploads the image and prompt to a third-party server and is disabled by default. " +
+        'Set "allowThirdParty": true in ~/.deepcode/settings.json to enable it.'
+    );
+  }
+
   const mimeType = MIME_TYPE_BY_EXTENSION.get(path.extname(imagePath).toLowerCase());
   if (!mimeType) {
     return toolError("Unsupported image format. Only JPEG, PNG, and WebP are supported.");
@@ -62,7 +70,6 @@ export async function handleUnderstandImageTool(
     form.append("prompt", prompt);
     form.append("image", new Blob([new Uint8Array(image)], { type: mimeType }), path.basename(imagePath));
 
-    const clientContext = context.createOpenAIClient?.();
     const machineId = clientContext?.machineId;
     const plusApiKey = clientContext?.plusApiKey;
     const response = await fetch(`${resolvePlusHost(plusApiKey)}/api/plugin/understand-image`, {
